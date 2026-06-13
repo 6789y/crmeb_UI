@@ -1,0 +1,23 @@
+[
+  {    "type": "pass",
+    "username": "19044972664",
+    "password": "12345678",
+    "expect": "CRMEB" },
+
+    {    "type": "fail",
+    "username": "19044972664",
+    "password": "",
+    "expect": "请填写密码"},
+
+    {    "type": "fail",
+    "username": "",
+    "password": "12345678",
+    "expect": "请填写手机号"},
+  {    "type": "fail",
+        "username": "1",
+        "expect": "手机号",
+    "password": "12345678"
+  }
+]
+
+
