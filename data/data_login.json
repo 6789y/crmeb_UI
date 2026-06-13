@@ -14,7 +14,7 @@
     "password": "12345678",
     "expect": "请填写手机号"},
   {    "type": "fail",
-        "username": "1",
+        "username": "12",
         "expect": "手机号",
     "password": "12345678"
   }
