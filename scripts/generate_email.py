@@ -23,6 +23,19 @@ def generate_email_html():
     github_server_url = get_env('GITHUB_SERVER_URL', 'https://github.com')
     github_run_id = get_env('GITHUB_RUN_ID')
 
+    # 读取用例统计
+    test_total = int(get_env('TEST_TOTAL', '0'))
+    test_passed = int(get_env('TEST_PASSED', '0'))
+    test_failed = int(get_env('TEST_FAILED', '0'))
+    test_skipped = int(get_env('TEST_SKIPPED', '0'))
+    test_errors = int(get_env('TEST_ERRORS', '0'))
+
+    # 计算通过率
+    if test_total > 0:
+        pass_rate = (test_passed / test_total) * 100
+    else:
+        pass_rate = 0.0
+
     # 构建报告链接
     report_url = f"{github_server_url}/{github_repository}/actions/runs/{github_run_id}"
 
@@ -168,6 +181,43 @@ def generate_email_html():
                     <td>{html.escape(test_time)}</td>
                 </tr>
             </table>
+
+            <!-- 用例统计卡片 -->
+            <div style="background-color: #f6f8fa; border-radius: 8px; padding: 16px; margin-bottom: 20px;">
+                <div style="font-size:14px;font-weight:600;margin-bottom:12px;color:#24292e;">📊 测试结果统计</div>
+                <div style="display:flex;justify-content:space-around;text-align:center;">
+                    <div>
+                        <div style="font-size:24px;font-weight:700;color:#24292e;">{test_total}</div>
+                        <div style="font-size:12px;color:#586069;">总计</div>
+                    </div>
+                    <div>
+                        <div style="font-size:24px;font-weight:700;color:#28a745;">{test_passed}</div>
+                        <div style="font-size:12px;color:#586069;">通过</div>
+                    </div>
+                    <div>
+                        <div style="font-size:24px;font-weight:700;color:#dc3545;">{test_failed}</div>
+                        <div style="font-size:12px;color:#586069;">失败</div>
+                    </div>
+                    <div>
+                        <div style="font-size:24px;font-weight:700;color:#ffc107;">{test_skipped}</div>
+                        <div style="font-size:12px;color:#586069;">跳过</div>
+                    </div>
+                    <div>
+                        <div style="font-size:24px;font-weight:700;color:#6f42c1;">{test_errors}</div>
+                        <div style="font-size:12px;color:#586069;">错误</div>
+                    </div>
+                </div>
+                <!-- 通过率进度条 -->
+                <div style="margin-top:12px;">
+                    <div style="display:flex;justify-content:space-between;font-size:12px;color:#586069;margin-bottom:4px;">
+                        <span>通过率</span>
+                        <span style="font-weight:600;color:{status_color};">{pass_rate:.1f}%</span>
+                    </div>
+                    <div style="background-color:#e1e4e8;border-radius:10px;height:8px;overflow:hidden;">
+                        <div style="background-color:{status_color};width:{pass_rate:.1f}%;height:100%;border-radius:10px;"></div>
+                    </div>
+                </div>
+            </div>
 
             <div style="font-size:14px;font-weight:500;margin-bottom:8px;color:#24292e;">提交信息</div>
             <div class="commit-msg">{html.escape(commit_msg)}</div>

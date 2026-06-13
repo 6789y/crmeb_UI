@@ -111,6 +111,72 @@ jobs:
             echo "status=FAILED" >> $GITHUB_OUTPUT
           fi
 
+          # 从 pytest 输出日志中提取用例统计
+          # pytest 的 summary 行格式: "= 1 passed, 1 failed, 1 skipped, 1 error in 10.00s ="
+          if [ -f test_output.log ]; then
+            SUMMARY_LINE=$(grep -E "passed|failed|skipped|error" test_output.log | grep -E "in [0-9.]+s" | tail -1)
+            echo ">>> 测试统计行: $SUMMARY_LINE"
+
+            # 提取各项数值（使用 sed 逐个提取）
+            TOTAL=0; PASSED=0; FAILED=0; SKIPPED=0; ERRORS=0
+
+            # 提取 passed
+            PASSED=$(echo "$SUMMARY_LINE" | sed -n 's/.*= //;s/ passed.*//p')
+            if echo "$PASSED" | grep -qE '^[0-9]+$'; then
+              :  # PASSED 已经是数字
+            else
+              PASSED=0
+            fi
+
+            # 提取 failed
+            FAILED=$(echo "$SUMMARY_LINE" | sed -n 's/.* passed, //;s/ failed.*//p')
+            if echo "$FAILED" | grep -qE '^[0-9]+$'; then
+              :  # FAILED 已经是数字
+            else
+              # 尝试另一种格式: "= 1 failed in"
+              FAILED=$(echo "$SUMMARY_LINE" | sed -n 's/.*= //;s/ failed.*//p')
+              if echo "$FAILED" | grep -qE '^[0-9]+$'; then
+                :  # FAILED 已经是数字
+              else
+                FAILED=0
+              fi
+            fi
+
+            # 提取 skipped
+            SKIPPED=$(echo "$SUMMARY_LINE" | sed -n 's/.* failed, //;s/ skipped.*//p')
+            if echo "$SKIPPED" | grep -qE '^[0-9]+$'; then
+              :  # SKIPPED 已经是数字
+            else
+              SKIPPED=0
+            fi
+
+            # 提取 error
+            ERRORS=$(echo "$SUMMARY_LINE" | sed -n 's/.* skipped, //;s/ error.*//p')
+            if echo "$ERRORS" | grep -qE '^[0-9]+$'; then
+              :  # ERRORS 已经是数字
+            else
+              ERRORS=0
+            fi
+
+            # 计算总数
+            TOTAL=$((PASSED + FAILED + SKIPPED + ERRORS))
+
+            echo ">>> 用例统计: 总计=${TOTAL}, 通过=${PASSED}, 失败=${FAILED}, 跳过=${SKIPPED}, 错误=${ERRORS}"
+
+            echo "total=${TOTAL}" >> $GITHUB_OUTPUT
+            echo "passed=${PASSED}" >> $GITHUB_OUTPUT
+            echo "failed=${FAILED}" >> $GITHUB_OUTPUT
+            echo "skipped=${SKIPPED}" >> $GITHUB_OUTPUT
+            echo "errors=${ERRORS}" >> $GITHUB_OUTPUT
+          else
+            echo ">>> 无日志文件，无法提取用例统计"
+            echo "total=0" >> $GITHUB_OUTPUT
+            echo "passed=0" >> $GITHUB_OUTPUT
+            echo "failed=0" >> $GITHUB_OUTPUT
+            echo "skipped=0" >> $GITHUB_OUTPUT
+            echo "errors=0" >> $GITHUB_OUTPUT
+          fi
+
           # 输出测试日志最后 30 行
           echo ">>> 测试输出日志（最后 30 行）:"
           if [ -f test_output.log ]; then
@@ -190,9 +256,15 @@ jobs:
           GITHUB_REPOSITORY: ${{ github.repository }}
           GITHUB_SERVER_URL: ${{ github.server_url }}
           GITHUB_RUN_ID: ${{ github.run_id }}
+          TEST_TOTAL: ${{ steps.check_result.outputs.total }}
+          TEST_PASSED: ${{ steps.check_result.outputs.passed }}
+          TEST_FAILED: ${{ steps.check_result.outputs.failed }}
+          TEST_SKIPPED: ${{ steps.check_result.outputs.skipped }}
+          TEST_ERRORS: ${{ steps.check_result.outputs.errors }}
         run: |
           echo ">>> [DEBUG] TEST_STATUS = $TEST_STATUS"
           echo ">>> [DEBUG] TEST_TIME  = $TEST_TIME"
+          echo ">>> [DEBUG] 用例统计: 总计=$TEST_TOTAL, 通过=$TEST_PASSED, 失败=$TEST_FAILED, 跳过=$TEST_SKIPPED, 错误=$TEST_ERRORS"
           echo ">>> 执行 generate_email.py..."
           python scripts/generate_email.py
           echo ">>> email_body.html 是否存在:"
@@ -207,12 +279,18 @@ jobs:
           MAIL_TO: ${{ github.event.inputs.email_to || secrets.MAIL_USERNAME }}
           BRANCH: ${{ github.ref_name }}
           COMMIT_HASH: ${{ github.sha }}
+          TEST_STATUS: ${{ steps.check_result.outputs.status }}
+          TEST_TOTAL: ${{ steps.check_result.outputs.total }}
+          TEST_PASSED: ${{ steps.check_result.outputs.passed }}
         run: |
           echo ">>> [DEBUG] 邮箱配置检查:"
           echo "   MAIL_USERNAME = $MAIL_USERNAME"
           echo "   MAIL_TO = $MAIL_TO"
           echo "   BRANCH = $BRANCH"
           echo "   COMMIT_HASH = ${COMMIT_HASH:0:8}"
+          echo "   TEST_STATUS = $TEST_STATUS"
+          echo "   TEST_TOTAL = $TEST_TOTAL"
+          echo "   TEST_PASSED = $TEST_PASSED"
 
           # 检查关键参数是否为空
           if [ -z "$MAIL_USERNAME" ] || [ -z "$MAIL_PASSWORD" ]; then

@@ -34,6 +34,17 @@ def send_email():
     # 读取其他信息
     branch = get_env('BRANCH', 'unknown')
     test_status = get_env('TEST_STATUS', 'UNKNOWN')
+    test_total = get_env('TEST_TOTAL', '0')
+    test_passed = get_env('TEST_PASSED', '0')
+
+    # 计算通过率
+    total_int = int(test_total) if test_total.isdigit() else 0
+    passed_int = int(test_passed) if test_passed.isdigit() else 0
+    if total_int > 0:
+        pass_rate = (passed_int / total_int) * 100
+        pass_rate_str = f'{pass_rate:.1f}%'
+    else:
+        pass_rate_str = 'N/A'
 
     # 构建邮件主题
     if test_status == 'COMPLETED':
@@ -43,7 +54,7 @@ def send_email():
     else:
         subject_prefix = '⚠️ 报告'
 
-    subject = f'{subject_prefix} CRMEB UI 自动化测试报告 - {branch}'
+    subject = f'{subject_prefix} CRMEB UI 自动化测试报告 - {branch} ({test_passed}/{test_total} {pass_rate_str})'
 
     # 构建邮件
     msg = MIMEMultipart('alternative')
