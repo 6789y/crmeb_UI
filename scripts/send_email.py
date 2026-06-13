@@ -66,24 +66,25 @@ def try_connect(method: str, smtp_host: str, smtp_port: int,
                 msg) -> bool:
     """
     尝试用指定方式连接并发送邮件
-    method: 'ssl' 或 'tls' 或 'plain'
+    method: 'ssl' 或 'tls'
     """
-    print(f"[INFO] 尝试 {method.upper()} 连接 {smtp_host}:{smtp_port} (超时 60s)...")
+    timeout = 15  # 统一使用 15 秒超时，避免长时间卡住
+    print(f"[INFO] 尝试 {method.upper()} 连接 {smtp_host}:{smtp_port} (超时 {timeout}s)...")
 
     try:
         if method == "ssl":
             context = ssl.create_default_context()
             context.check_hostname = False
             context.verify_mode = ssl.CERT_NONE
-            server = smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=60, context=context)
+            server = smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=timeout, context=context)
         elif method == "tls":
-            server = smtplib.SMTP(smtp_host, smtp_port, timeout=60)
+            server = smtplib.SMTP(smtp_host, smtp_port, timeout=timeout)
             server.ehlo()
             server.starttls()
             server.ehlo()
-        else:  # plain
-            server = smtplib.SMTP(smtp_host, smtp_port, timeout=30)
-            server.ehlo()
+        else:
+            print(f"[WARN] {method.upper()} 不支持的连接方式")
+            return False
 
         server.login(smtp_user, smtp_pass)
         server.sendmail(smtp_user, mail_to.split(","), msg.as_string())
@@ -97,8 +98,8 @@ def try_connect(method: str, smtp_host: str, smtp_port: int,
         print("  - 授权码获取: QQ邮箱 → 设置 → 账户 → POP3/SMTP服务 → 生成授权码")
         return False
     except (socket.timeout, smtplib.SMTPConnectError, ConnectionRefusedError,
-            OSError, TimeoutError) as e:
-        print(f"[WARN] {method.upper()} 连接失败: {type(e).__name__}")
+            OSError, TimeoutError, TimeoutError) as e:
+        print(f"[WARN] {method.upper()} 连接失败 ({type(e).__name__})，跳过此策略")
         return False
     except Exception as e:
         print(f"[WARN] {method.upper()} 错误: {type(e).__name__}: {e}")
@@ -158,26 +159,29 @@ def send_email() -> None:
     print("=" * 60)
 
     # ========== 多策略自动回退 ==========
-    # 策略列表: [(method, port), ...]
-    # 先尝试配置的端口，再尝试其他端口
+    # 只尝试主流的 SSL 465 和 TLS 587 端口
+    # 25 端口在云环境（GitHub Actions）中几乎都被屏蔽，跳过以避免长时间卡住
     config_method = "ssl" if smtp_port == 465 else "tls"
     strategies = [
         (config_method, smtp_port),  # 使用配置的端口
-        ("ssl", 465),                # SSL 465 备用
-        ("tls", 587),                # TLS 587 备用
-        ("tls", 25),                 # TLS 25 备用
-        ("plain", 25),               # 明文 25 兜底
     ]
+    # 如果配置的端口不是标准端口，补充标准端口尝试
+    if smtp_port != 465:
+        strategies.append(("ssl", 465))
+    if smtp_port != 587:
+        strategies.append(("tls", 587))
 
     # 去重: 跳过已尝试过的 (method, port) 组合
     tried = set()
 
-    for method, port in strategies:
+    print(f"\n>>> 开始尝试发送邮件，共 {len(strategies)} 种策略...")
+    for idx, (method, port) in enumerate(strategies, 1):
         key = (method, port)
         if key in tried:
             continue
         tried.add(key)
 
+        print(f">>> 策略 {idx}/{len(strategies)}: {method.upper()} {smtp_host}:{port}")
         time.sleep(0.5)  # 避免触发限流
         if try_connect(method, smtp_host, port, smtp_user, smtp_pass, mail_to, msg):
             print(f"\n{'=' * 60}")
