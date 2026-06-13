@@ -16,6 +16,9 @@ on:
 env:
   TZ: Asia/Shanghai
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  MAIL_USERNAME: ${{ secrets.MAIL_USERNAME }}
+  MAIL_PASSWORD: ${{ secrets.MAIL_PASSWORD }}
+  MAIL_TO: ${{ secrets.MAIL_TO }}
 
 jobs:
   test:
@@ -199,36 +202,29 @@ jobs:
       - name: 发送测试报告邮件
         if: always()
         env:
-          HOST_QQ: ${{ secrets.HOST_QQ }}
-          PORT_QQ: ${{ secrets.PORT_QQ }}
-          USERNAME_QQ: ${{ secrets.USERNAME_QQ }}
-          PASSWORD_QQ: ${{ secrets.PASSWORD_QQ }}
-          MAIL_TO: ${{ github.event.inputs.email_to || secrets.USERNAME_QQ }}
+          MAIL_USERNAME: ${{ secrets.MAIL_USERNAME }}
+          MAIL_PASSWORD: ${{ secrets.MAIL_PASSWORD }}
+          MAIL_TO: ${{ github.event.inputs.email_to || secrets.MAIL_USERNAME }}
           BRANCH: ${{ github.ref_name }}
           COMMIT_HASH: ${{ github.sha }}
         run: |
           echo ">>> [DEBUG] 邮箱配置检查:"
-          echo "   HOST_QQ = $HOST_QQ"
-          echo "   PORT_QQ = $PORT_QQ"
-          echo "   USERNAME_QQ = $USERNAME_QQ"
+          echo "   MAIL_USERNAME = $MAIL_USERNAME"
           echo "   MAIL_TO = $MAIL_TO"
           echo "   BRANCH = $BRANCH"
           echo "   COMMIT_HASH = ${COMMIT_HASH:0:8}"
 
           # 检查关键参数是否为空
-          if [ -z "$HOST_QQ" ] || [ -z "$PORT_QQ" ] || [ -z "$USERNAME_QQ" ] || [ -z "$PASSWORD_QQ" ]; then
+          if [ -z "$MAIL_USERNAME" ] || [ -z "$MAIL_PASSWORD" ]; then
             echo "❌ [WARNING] 邮箱配置不完整，跳过邮件发送"
             echo "   缺失的变量:"
-            [ -z "$HOST_QQ" ] && echo "   - HOST_QQ"
-            [ -z "$PORT_QQ" ] && echo "   - PORT_QQ"
-            [ -z "$USERNAME_QQ" ] && echo "   - USERNAME_QQ"
-            [ -z "$PASSWORD_QQ" ] && echo "   - PASSWORD_QQ"
+            [ -z "$MAIL_USERNAME" ] && echo "   - MAIL_USERNAME"
+            [ -z "$MAIL_PASSWORD" ] && echo "   - MAIL_PASSWORD"
             echo ""
             echo "请在 GitHub 仓库 Settings → Secrets and variables → Actions 中添加以下 Secrets:"
-            echo "   - HOST_QQ: SMTP 服务器地址 (如 smtp.qq.com)"
-            echo "   - PORT_QQ: SMTP 端口 (如 465)"
-            echo "   - USERNAME_QQ: QQ 邮箱地址"
-            echo "   - PASSWORD_QQ: QQ 邮箱 SMTP 授权码"
+            echo "   - MAIL_USERNAME: 邮箱地址（如 your_email@qq.com）"
+            echo "   - MAIL_PASSWORD: 邮箱 SMTP 授权码"
+            echo "   - MAIL_TO: 收件人邮箱地址（可选，默认发送给发件人自己）"
             exit 0
           fi
 
