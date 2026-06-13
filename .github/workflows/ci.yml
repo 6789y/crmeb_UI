@@ -15,6 +15,7 @@ on:
 # ========== 环境变量（全局） ==========
 env:
   TZ: Asia/Shanghai
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   test:
@@ -73,15 +74,16 @@ jobs:
           echo ">>> Python 版本: $(python --version)"
           echo ">>> Playwright 版本: $(python -m playwright --version)"
 
-          # 覆盖 pytest.ini 中的 addopts（避免 --alluredir=report 冲突）
-          # 使用 set -o pipefail 确保管道命令正确传递退出码
+          # 关键修复:
+          # 1. pytest-playwright 0.8.0 不支持 --headless 参数，Playwright 默认就是无头模式
+          #    只需要不传 --headed 即可（pytest.ini 中的 --headed 已注释掉）
+          # 2. 使用 -o 覆盖 pytest.ini 中的 addopts，避免 --alluredir=report 冲突
+          # 3. 使用 set -o pipefail 确保管道命令正确传递退出码
           set -o pipefail
           python -m pytest script/ \
             -o "addopts=-s --alluredir=raw-report" \
-            --headless \
             --slowmo 300 \
             -v \
-            -x \
             --reruns 1 \
             --reruns-delay 5 \
             2>&1 | tee test_output.log
