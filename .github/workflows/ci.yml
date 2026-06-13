@@ -1,0 +1,138 @@
+name: CRMEB UI 自动化测试
+
+on:
+  push:
+    branches: [ main, master, develop ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+    inputs:
+      email_to:
+        description: '邮件接收地址（默认发送给发件人自己）'
+        required: false
+        default: ''
+
+jobs:
+  test:
+    name: 执行 UI 自动化测试
+    runs-on: ubuntu-latest
+
+    steps:
+      # ========== 1. 检出代码 ==========
+      - name: 检出代码
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # ========== 2. 设置 Python ==========
+      - name: 设置 Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      # ========== 3. 缓存 pip 依赖 ==========
+      - name: 缓存 pip 依赖
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      # ========== 4. 安装依赖 ==========
+      - name: 安装 Python 依赖
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install allure-pytest
+
+      # ========== 5. 安装 Playwright 浏览器 ==========
+      - name: 安装 Playwright 浏览器
+        run: |
+          python -m playwright install chromium
+          python -m playwright install-deps chromium
+
+      # ========== 6. 执行测试 ==========
+      - name: 执行测试并生成 Allure 报告
+        id: run_tests
+        continue-on-error: true
+        run: |
+          mkdir -p raw-report
+          python -m pytest script/ \
+            --headed \
+            --slowmo 500 \
+            --alluredir=raw-report \
+            -v \
+            -s \
+            -x \
+            --reruns 1 \
+            --reruns-delay 5 \
+            2>&1 | tee test_output.log
+
+      # ========== 7. 生成 Allure 报告 ==========
+      - name: 生成 Allure HTML 报告
+        if: always()
+        run: |
+          pip install allure-pytest
+          # 如果 allure 命令行工具没有安装，使用 python 方式安装
+          which allure || (pip install allure-pytest && curl -sL https://github.com/allure-framework/allure2/releases/download/2.24.0/allure_2.24.0-1_all.deb -o allure.deb && sudo dpkg -i allure.deb || true)
+          allure generate raw-report -o allure-report --clean 2>&1 || echo "Allure CLI 不可用，跳过 HTML 报告生成"
+
+      # ========== 8. 上传 Allure 报告产物 ==========
+      - name: 上传 Allure 报告
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: allure-report
+          path: allure-report/
+          retention-days: 7
+
+      # ========== 9. 上传原始报告数据 ==========
+      - name: 上传原始报告数据
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: raw-report
+          path: raw-report/
+          retention-days: 7
+
+      # ========== 10. 生成邮件 HTML ==========
+      - name: 生成邮件 HTML 内容
+        id: generate_email_html
+        if: always()
+        env:
+          BRANCH: ${{ github.ref_name }}
+          COMMIT_HASH: ${{ github.sha }}
+          COMMIT_AUTHOR: ${{ github.actor }}
+          COMMIT_MSG: ${{ github.event.head_commit.message || '手动触发' }}
+          TEST_STATUS: ${{ steps.run_tests.outcome }}
+          TEST_TIME: ${{ steps.run_tests.started_at }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_SERVER_URL: ${{ github.server_url }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+        run: |
+          python scripts/generate_email.py
+
+      # ========== 11. 发送邮件通知 ==========
+      - name: 发送测试报告邮件
+        if: always()
+        env:
+          HOST_QQ: ${{ secrets.HOST_QQ }}
+          PORT_QQ: ${{ secrets.PORT_QQ }}
+          USERNAME_QQ: ${{ secrets.USERNAME_QQ }}
+          PASSWORD_QQ: ${{ secrets.PASSWORD_QQ }}
+          MAIL_TO: ${{ github.event.inputs.email_to || secrets.USERNAME_QQ }}
+        run: |
+          python scripts/send_email.py
+
+      # ========== 12. 任务状态总结 ==========
+      - name: 任务状态总结
+        if: always()
+        run: |
+          echo "## ✅ CRMEB UI 自动化测试完成" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **分支**: ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **提交**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **触发者**: ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **测试状态**: ${{ steps.run_tests.outcome }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **报告下载**: [Allure 报告](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})" >> $GITHUB_STEP_SUMMARY
