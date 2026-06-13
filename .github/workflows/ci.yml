@@ -12,6 +12,10 @@ on:
         required: false
         default: ''
 
+# ========== 环境变量（全局） ==========
+env:
+  TZ: Asia/Shanghai
+
 jobs:
   test:
     name: 执行 UI 自动化测试
@@ -44,7 +48,6 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install allure-pytest
 
       # ========== 5. 安装 Playwright 浏览器 ==========
       - name: 安装 Playwright 浏览器
@@ -52,33 +55,95 @@ jobs:
           python -m playwright install chromium
           python -m playwright install-deps chromium
 
-      # ========== 6. 执行测试 ==========
+      # ========== 6. 记录测试开始时间 ==========
+      - name: 记录测试开始时间
+        id: start_time
+        run: echo "time=$(date '+%Y-%m-%d %H:%M:%S')" >> $GITHUB_OUTPUT
+
+      # ========== 7. 执行测试 ==========
       - name: 执行测试并生成 Allure 报告
         id: run_tests
         continue-on-error: true
         run: |
+          # 清理旧的报告目录
+          rm -rf raw-report allure-report report
           mkdir -p raw-report
+
+          echo ">>> [DEBUG] 开始执行测试..."
+          echo ">>> Python 版本: $(python --version)"
+          echo ">>> Playwright 版本: $(python -m playwright --version)"
+
+          # 覆盖 pytest.ini 中的 addopts（避免 --alluredir=report 冲突）
+          # 使用 set -o pipefail 确保管道命令正确传递退出码
+          set -o pipefail
           python -m pytest script/ \
-            --headed \
-            --slowmo 500 \
-            --alluredir=raw-report \
+            -o "addopts=-s --alluredir=raw-report" \
+            --headless \
+            --slowmo 300 \
             -v \
-            -s \
             -x \
             --reruns 1 \
             --reruns-delay 5 \
             2>&1 | tee test_output.log
 
-      # ========== 7. 生成 Allure 报告 ==========
+          EXIT_CODE=$?
+          echo ">>> [DEBUG] 测试命令退出码: $EXIT_CODE"
+          echo ">>> [DEBUG] Allure 报告目录 raw-report 内容:"
+          ls -la raw-report/ 2>&1 || echo "raw-report 目录不存在"
+          exit $EXIT_CODE
+
+      # ========== 8. 检查测试结果 ==========
+      - name: 检查测试结果
+        id: check_result
+        if: always()
+        run: |
+          # 将 steps.run_tests.outcome（success/failure）映射为 COMPLETED/FAILED
+          OUTCOME="${{ steps.run_tests.outcome }}"
+          echo ">>> 原始 outcome: $OUTCOME"
+          if [ "$OUTCOME" = "success" ]; then
+            echo "status=COMPLETED" >> $GITHUB_OUTPUT
+          else
+            echo "status=FAILED" >> $GITHUB_OUTPUT
+          fi
+
+          # 输出测试日志最后 30 行
+          echo ">>> 测试输出日志（最后 30 行）:"
+          if [ -f test_output.log ]; then
+            tail -30 test_output.log
+          else
+            echo "无日志文件"
+          fi
+
+          # 检查 Allure 数据
+          echo ">>> raw-report 目录中的 JSON 文件:"
+          find raw-report -name "*.json" 2>/dev/null | head -10 || echo "无 JSON 文件"
+
+      # ========== 9. 生成 Allure HTML 报告 ==========
       - name: 生成 Allure HTML 报告
         if: always()
         run: |
-          pip install allure-pytest
-          # 如果 allure 命令行工具没有安装，使用 python 方式安装
-          which allure || (pip install allure-pytest && curl -sL https://github.com/allure-framework/allure2/releases/download/2.24.0/allure_2.24.0-1_all.deb -o allure.deb && sudo dpkg -i allure.deb || true)
-          allure generate raw-report -o allure-report --clean 2>&1 || echo "Allure CLI 不可用，跳过 HTML 报告生成"
+          echo ">>> [DEBUG] 检查 allure 命令..."
+          if which allure 2>/dev/null; then
+            echo "allure 已安装，版本: $(allure --version)"
+            allure generate raw-report -o allure-report --clean
+            echo ">>> allure-report 目录:"
+            ls -la allure-report/ 2>/dev/null
+          else
+            echo "allure 未安装，尝试安装..."
+            curl -sL "https://github.com/allure-framework/allure2/releases/download/2.24.0/allure_2.24.0-1_all.deb" -o /tmp/allure.deb 2>/dev/null
+            if [ -f /tmp/allure.deb ]; then
+              sudo dpkg -i /tmp/allure.deb 2>/dev/null || sudo apt-get install -fy -qq 2>/dev/null
+            fi
+            if which allure 2>/dev/null; then
+              allure generate raw-report -o allure-report --clean
+            else
+              echo "Allure CLI 安装失败，跳过 HTML 报告生成"
+              mkdir -p allure-report
+              echo "Allure report generation skipped" > allure-report/README.md
+            fi
+          fi
 
-      # ========== 8. 上传 Allure 报告产物 ==========
+      # ========== 10. 上传 Allure 报告产物 ==========
       - name: 上传 Allure 报告
         if: always()
         uses: actions/upload-artifact@v4
@@ -87,7 +152,7 @@ jobs:
           path: allure-report/
           retention-days: 7
 
-      # ========== 9. 上传原始报告数据 ==========
+      # ========== 11. 上传原始报告数据 ==========
       - name: 上传原始报告数据
         if: always()
         uses: actions/upload-artifact@v4
@@ -96,24 +161,39 @@ jobs:
           path: raw-report/
           retention-days: 7
 
-      # ========== 10. 生成邮件 HTML ==========
+      # ========== 12. 上传测试日志 ==========
+      - name: 上传测试日志
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-logs
+          path: |
+            test_output.log
+            log/*.log
+          retention-days: 7
+
+      # ========== 13. 生成邮件 HTML ==========
       - name: 生成邮件 HTML 内容
-        id: generate_email_html
         if: always()
         env:
           BRANCH: ${{ github.ref_name }}
           COMMIT_HASH: ${{ github.sha }}
           COMMIT_AUTHOR: ${{ github.actor }}
           COMMIT_MSG: ${{ github.event.head_commit.message || '手动触发' }}
-          TEST_STATUS: ${{ steps.run_tests.outcome }}
-          TEST_TIME: ${{ steps.run_tests.started_at }}
+          TEST_STATUS: ${{ steps.check_result.outputs.status }}
+          TEST_TIME: ${{ steps.start_time.outputs.time }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           GITHUB_SERVER_URL: ${{ github.server_url }}
           GITHUB_RUN_ID: ${{ github.run_id }}
         run: |
+          echo ">>> [DEBUG] TEST_STATUS = $TEST_STATUS"
+          echo ">>> [DEBUG] TEST_TIME  = $TEST_TIME"
+          echo ">>> 执行 generate_email.py..."
           python scripts/generate_email.py
+          echo ">>> email_body.html 是否存在:"
+          ls -la email_body.html 2>/dev/null || echo "❌ 文件不存在"
 
-      # ========== 11. 发送邮件通知 ==========
+      # ========== 14. 发送邮件通知 ==========
       - name: 发送测试报告邮件
         if: always()
         env:
@@ -123,16 +203,52 @@ jobs:
           PASSWORD_QQ: ${{ secrets.PASSWORD_QQ }}
           MAIL_TO: ${{ github.event.inputs.email_to || secrets.USERNAME_QQ }}
         run: |
+          echo ">>> [DEBUG] 邮箱配置检查:"
+          echo "   HOST_QQ = $HOST_QQ"
+          echo "   PORT_QQ = $PORT_QQ"
+          echo "   USERNAME_QQ = $USERNAME_QQ"
+          echo "   MAIL_TO = $MAIL_TO"
+          echo "   PASSWORD_QQ 长度: $(echo -n '$PASSWORD_QQ' | wc -c)"
+
+          # 检查关键参数是否为空
+          if [ -z "$HOST_QQ" ] || [ -z "$PORT_QQ" ] || [ -z "$USERNAME_QQ" ] || [ -z "$PASSWORD_QQ" ]; then
+            echo "❌ [WARNING] 邮箱配置不完整，跳过邮件发送"
+            echo "   缺失的变量:"
+            [ -z "$HOST_QQ" ] && echo "   - HOST_QQ"
+            [ -z "$PORT_QQ" ] && echo "   - PORT_QQ"
+            [ -z "$USERNAME_QQ" ] && echo "   - USERNAME_QQ"
+            [ -z "$PASSWORD_QQ" ] && echo "   - PASSWORD_QQ"
+            echo ""
+            echo "请在 GitHub 仓库 Settings → Secrets and variables → Actions 中添加以下 Secrets:"
+            echo "   - HOST_QQ: SMTP 服务器地址 (如 smtp.qq.com)"
+            echo "   - PORT_QQ: SMTP 端口 (如 465)"
+            echo "   - USERNAME_QQ: QQ 邮箱地址"
+            echo "   - PASSWORD_QQ: QQ 邮箱 SMTP 授权码"
+            exit 0
+          fi
+
+          echo ">>> 执行 send_email.py..."
           python scripts/send_email.py
 
-      # ========== 12. 任务状态总结 ==========
+      # ========== 15. 任务状态总结 ==========
       - name: 任务状态总结
         if: always()
         run: |
           echo "## ✅ CRMEB UI 自动化测试完成" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "- **分支**: ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **提交**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **触发者**: ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **测试状态**: ${{ steps.run_tests.outcome }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **报告下载**: [Allure 报告](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})" >> $GITHUB_STEP_SUMMARY
+          echo "| 项目 | 值 |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|-----|" >> $GITHUB_STEP_SUMMARY
+          echo "| **分支** | ${{ github.ref_name }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **提交** | ${{ github.sha }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **触发者** | ${{ github.actor }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **测试状态** | ${{ steps.run_tests.outcome }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **报告下载** | [Allure 报告](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}) |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 测试日志" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          if [ -f test_output.log ]; then
+            tail -20 test_output.log >> $GITHUB_STEP_SUMMARY
+          else
+            echo "无日志" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo '```' >> $GITHUB_STEP_SUMMARY
