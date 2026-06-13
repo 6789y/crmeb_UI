@@ -9,6 +9,8 @@
   USERNAME_QQ - QQ 邮箱地址（如 123456@qq.com）
   PASSWORD_QQ - QQ 邮箱 SMTP 授权码
   MAIL_TO     - 收件人地址（可选，默认发给自己）
+  BRANCH      - 分支名（可选，用于邮件主题）
+  COMMIT_HASH - 提交哈希（可选，用于邮件主题）
 
 依赖:
   Python 标准库 smtplib / email，无需额外安装
@@ -16,6 +18,9 @@
 
 import os
 import smtplib
+import socket
+import ssl
+import time
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.header import Header
@@ -33,7 +38,6 @@ def load_html_body(file_path: str = "email_body.html") -> str:
         with open(file_path, "r", encoding="utf-8") as f:
             return f.read()
     except FileNotFoundError:
-        # 如果没有邮件模板，生成一个简单的纯文本报告
         return f"""
         <html>
         <body>
@@ -51,12 +55,54 @@ def load_html_body(file_path: str = "email_body.html") -> str:
 def get_test_summary(html_body: str) -> str:
     """从 HTML 中提取测试概要作为邮件主题的一部分"""
     import re
-    # 尝试提取测试状态
     status_match = re.search(
         r'status_text["\']?\s*[:=]\s*["\']?([^"\'<]+)', html_body
     )
-    status = status_match.group(1).strip() if status_match else "测试完成"
-    return status
+    return status_match.group(1).strip() if status_match else "测试完成"
+
+
+def try_connect(method: str, smtp_host: str, smtp_port: int,
+                smtp_user: str, smtp_pass: str, mail_to: str,
+                msg) -> bool:
+    """
+    尝试用指定方式连接并发送邮件
+    method: 'ssl' 或 'tls' 或 'plain'
+    """
+    print(f"[INFO] 尝试 {method.upper()} 连接 {smtp_host}:{smtp_port} (超时 60s)...")
+
+    try:
+        if method == "ssl":
+            context = ssl.create_default_context()
+            context.check_hostname = False
+            context.verify_mode = ssl.CERT_NONE
+            server = smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=60, context=context)
+        elif method == "tls":
+            server = smtplib.SMTP(smtp_host, smtp_port, timeout=60)
+            server.ehlo()
+            server.starttls()
+            server.ehlo()
+        else:  # plain
+            server = smtplib.SMTP(smtp_host, smtp_port, timeout=30)
+            server.ehlo()
+
+        server.login(smtp_user, smtp_pass)
+        server.sendmail(smtp_user, mail_to.split(","), msg.as_string())
+        server.quit()
+        print(f"[SUCCESS] {method.upper()} 发送成功 -> {mail_to}")
+        return True
+
+    except smtplib.SMTPAuthenticationError:
+        print(f"[ERROR] {method.upper()} 认证失败，请检查 USERNAME_QQ 和 PASSWORD_QQ")
+        print("  - 对于 QQ 邮箱，PASSWORD_QQ 应使用 SMTP 授权码，而非登录密码")
+        print("  - 授权码获取: QQ邮箱 → 设置 → 账户 → POP3/SMTP服务 → 生成授权码")
+        return False
+    except (socket.timeout, smtplib.SMTPConnectError, ConnectionRefusedError,
+            OSError, TimeoutError) as e:
+        print(f"[WARN] {method.upper()} 连接失败: {type(e).__name__}")
+        return False
+    except Exception as e:
+        print(f"[WARN] {method.upper()} 错误: {type(e).__name__}: {e}")
+        return False
 
 
 def send_email() -> None:
@@ -67,12 +113,11 @@ def send_email() -> None:
     smtp_port_str = get_env_or("PORT_QQ", "465")
     smtp_user = get_env_or("USERNAME_QQ", "")
     smtp_pass = get_env_or("PASSWORD_QQ", "")
-    mail_to = get_env_or("MAIL_TO", smtp_user)  # 默认发送给自己
+    mail_to = get_env_or("MAIL_TO", smtp_user)
 
     # ========== 参数校验 ==========
     if not smtp_user or not smtp_pass:
         print("[WARNING] 邮箱配置不完整 (USERNAME_QQ 或 PASSWORD_QQ 为空)，跳过邮件发送")
-        print(f"  HOST_QQ={smtp_host}, PORT_QQ={smtp_port_str}, USERNAME_QQ={'*' * max(0, len(smtp_user) - 4) + smtp_user[-4:] if smtp_user else '(空)'}")
         return
 
     try:
@@ -85,65 +130,76 @@ def send_email() -> None:
     html_body = load_html_body()
     test_status = get_test_summary(html_body)
 
-    # 获取提交信息用于邮件主题
     branch = get_env_or("BRANCH", "unknown")
     commit_hash = get_env_or("COMMIT_HASH", "unknown")[:8]
 
-    # 创建 multipart 邮件对象
     msg = MIMEMultipart("alternative")
     msg["From"] = f"CRMEB 自动化测试 <{smtp_user}>"
     msg["To"] = mail_to
-    subject = f"[CRMEB UI Test] {test_status} - {branch} ({commit_hash}) - {datetime.utcnow().strftime('%m-%d %H:%M')}"
+    subject = (
+        f"[CRMEB UI Test] {test_status}"
+        f" - {branch} ({commit_hash})"
+        f" - {datetime.now().strftime('%m-%d %H:%M')}"
+    )
     msg["Subject"] = Header(subject, "utf-8")
-    msg["X-Priority"] = "3"  # 正常优先级
+    msg["X-Priority"] = "3"
 
-    # 添加 HTML 正文
     html_part = MIMEText(html_body, "html", "utf-8")
     msg.attach(html_part)
 
-    # ========== 发送邮件 ==========
+    # ========== 打印配置 ==========
     print("=" * 60)
     print("邮件发送配置:")
-    print(f"  服务器: {smtp_host}:{smtp_port}")
+    print(f"  服务器: {smtp_host}")
+    print(f"  配置端口: {smtp_port}")
     print(f"  发件人: {smtp_user}")
     print(f"  收件人: {mail_to}")
     print(f"  主题: {subject}")
     print("=" * 60)
 
-    try:
-        if smtp_port == 465:
-            # SSL 方式 (QQ 邮箱推荐)
-            print("[INFO] 使用 SSL 方式连接...")
-            with smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=30) as server:
-                server.login(smtp_user, smtp_pass)
-                server.sendmail(smtp_user, mail_to.split(","), msg.as_string())
-        else:
-            # TLS 方式 (587 或其它端口)
-            print(f"[INFO] 使用 TLS 方式连接 (端口 {smtp_port})...")
-            with smtplib.SMTP(smtp_host, smtp_port, timeout=30) as server:
-                server.starttls()
-                server.login(smtp_user, smtp_pass)
-                server.sendmail(smtp_user, mail_to.split(","), msg.as_string())
+    # ========== 多策略自动回退 ==========
+    # 策略列表: [(method, port), ...]
+    # 先尝试配置的端口，再尝试其他端口
+    config_method = "ssl" if smtp_port == 465 else "tls"
+    strategies = [
+        (config_method, smtp_port),  # 使用配置的端口
+        ("ssl", 465),                # SSL 465 备用
+        ("tls", 587),                # TLS 587 备用
+        ("tls", 25),                 # TLS 25 备用
+        ("plain", 25),               # 明文 25 兜底
+    ]
 
-        print(f"[SUCCESS] 邮件发送成功 -> {mail_to}")
+    # 去重: 跳过已尝试过的 (method, port) 组合
+    tried = set()
 
-    except smtplib.SMTPAuthenticationError:
-        print("[ERROR] SMTP 认证失败，请检查 USERNAME_QQ 和 PASSWORD_QQ")
-        print("  - 对于 QQ 邮箱，PASSWORD_QQ 应使用 SMTP 授权码，而非登录密码")
-        print("  - 授权码获取方式: QQ邮箱 -> 设置 -> 账户 -> 生成授权码")
-    except smtplib.SMTPConnectError:
-        print(f"[ERROR] 无法连接到 SMTP 服务器 {smtp_host}:{smtp_port}")
-        print("  - 请检查 HOST_QQ 和 PORT_QQ 是否正确")
-    except smtplib.SMTPSenderRefused:
-        print(f"[ERROR] 发件人被拒绝: {smtp_user}")
-    except smtplib.SMTPRecipientsRefused:
-        print(f"[ERROR] 收件人被拒绝: {mail_to}")
-    except smtplib.SMTPException as e:
-        print(f"[ERROR] SMTP 错误: {e}")
-    except Exception as e:
-        print(f"[ERROR] 未知错误: {e}")
-        import traceback
-        traceback.print_exc()
+    for method, port in strategies:
+        key = (method, port)
+        if key in tried:
+            continue
+        tried.add(key)
+
+        time.sleep(0.5)  # 避免触发限流
+        if try_connect(method, smtp_host, port, smtp_user, smtp_pass, mail_to, msg):
+            print(f"\n{'=' * 60}")
+            print("✅ 邮件发送成功！")
+            print(f"{'=' * 60}")
+            return
+
+    # ========== 全部失败 ==========
+    print(f"\n{'=' * 60}")
+    print("❌ 所有发送策略均失败")
+    print(f"{'=' * 60}")
+    print("")
+    print("可能的原因和解决方法:")
+    print("1. 网络环境限制：GitHub Actions 无法连接 QQ 邮箱 SMTP")
+    print("   - 这是常见问题，建议换用其他邮件服务:")
+    print("     • SendGrid: HOST_QQ=smtp.sendgrid.net, PORT_QQ=465, PASSWORD_QQ=API Key")
+    print("     • Mailgun:  HOST_QQ=smtp.mailgun.org, PORT_QQ=465")
+    print("     • 阿里云邮件推送: HOST_QQ=smtpdm.aliyun.com, PORT_QQ=465")
+    print("2. 端口被屏蔽")
+    print("   - 检查 PORT_QQ 是否可访问 (QQ 邮箱推荐 465 SSL)")
+    print("3. 认证信息错误")
+    print("   - PASSWORD_QQ 必须为 SMTP 授权码（非邮箱登录密码）")
 
 
 if __name__ == "__main__":

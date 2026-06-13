@@ -204,13 +204,16 @@ jobs:
           USERNAME_QQ: ${{ secrets.USERNAME_QQ }}
           PASSWORD_QQ: ${{ secrets.PASSWORD_QQ }}
           MAIL_TO: ${{ github.event.inputs.email_to || secrets.USERNAME_QQ }}
+          BRANCH: ${{ github.ref_name }}
+          COMMIT_HASH: ${{ github.sha }}
         run: |
           echo ">>> [DEBUG] 邮箱配置检查:"
           echo "   HOST_QQ = $HOST_QQ"
           echo "   PORT_QQ = $PORT_QQ"
           echo "   USERNAME_QQ = $USERNAME_QQ"
           echo "   MAIL_TO = $MAIL_TO"
-          echo "   PASSWORD_QQ 长度: $(echo -n '$PASSWORD_QQ' | wc -c)"
+          echo "   BRANCH = $BRANCH"
+          echo "   COMMIT_HASH = ${COMMIT_HASH:0:8}"
 
           # 检查关键参数是否为空
           if [ -z "$HOST_QQ" ] || [ -z "$PORT_QQ" ] || [ -z "$USERNAME_QQ" ] || [ -z "$PASSWORD_QQ" ]; then
