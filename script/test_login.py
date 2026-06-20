@@ -10,7 +10,6 @@ class TestLogin:
     def test_login(self, get_page_func, username, password, expect, get_alert, type):
       with allure.step('登录测试'):
         self.page01_login = Page1Login(get_page_func)
-        #
         self.page01_login.login_method(username, password)
         if type=='pass':
 

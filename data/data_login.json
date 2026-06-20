@@ -17,6 +17,15 @@
         "username": "12",
         "expect": "手机号",
     "password": "12345678"
+  },
+    {    "type": "fail",
+        "username": "122",
+        "expect": "手机号",
+    "password": "12345678"
+  },  {    "type": "fail",
+        "username": "312",
+        "expect": "手机号",
+    "password": "12345678"
   }
 ]
 

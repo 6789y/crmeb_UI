@@ -266,7 +266,7 @@ jobs:
           echo ">>> [DEBUG] TEST_TIME  = $TEST_TIME"
           echo ">>> [DEBUG] 用例统计: 总计=$TEST_TOTAL, 通过=$TEST_PASSED, 失败=$TEST_FAILED, 跳过=$TEST_SKIPPED, 错误=$TEST_ERRORS"
           echo ">>> 执行 generate_email.py..."
-          python scripts/generate_email.py
+          python mes/generate_email.py
           echo ">>> email_body.html 是否存在:"
           ls -la email_body.html 2>/dev/null || echo "❌ 文件不存在"
 
@@ -307,7 +307,7 @@ jobs:
           fi
 
           echo ">>> 执行 send_email.py..."
-          python scripts/send_email.py
+          python mes/send_email.py
 
       # ========== 15. 任务状态总结 ==========
       - name: 任务状态总结
