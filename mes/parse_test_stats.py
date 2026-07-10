@@ -16,7 +16,7 @@ from pathlib import Path
 
 def find_int(pattern, text):
     """从文本中提取第一个匹配的数字，未匹配返回 0"""
-    m = re.search(pattern, text, re.I | re.S)
+    m = re.search(pattern, text)
     if m:
         return int(m.group(1))
     return 0
@@ -33,10 +33,11 @@ def parse_test_stats(log_path: str) -> dict:
 
     # 方法1: 解析 pytest summary 行
     # 格式: "= 1 failed, 7 passed, 1 rerun in 162.94s (0:02:42) ="
-    passed = find_int(r'(\d+)\s+passed', text)
-    failed = find_int(r'(\d+)\s+failed', text)
-    skipped = find_int(r'(\d+)\s+skipped', text)
-    errors = find_int(r'(\d+)\s+error', text)  # 匹配 error 和 errors
+    # 注意: 使用 [ \t]+ 而非 \s+，防止跨行匹配（如 "12345678\nPASSED"）
+    passed = find_int(r'(\d+)[ \t]+passed', text)
+    failed = find_int(r'(\d+)[ \t]+failed', text)
+    skipped = find_int(r'(\d+)[ \t]+skipped', text)
+    errors = find_int(r'(\d+)[ \t]+error', text)  # 匹配 error 和 errors
 
     # 如果 summary 行解析到数据，直接返回
     if passed + failed + skipped + errors > 0:
