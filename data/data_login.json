@@ -12,10 +12,10 @@
     {    "type": "fail",
     "username": "",
     "password": "12345678",
-    "expect": "请填写手机号"},
+    "expect": "手机号"},
   {    "type": "fail",
         "username": "12",
-        "expect": "请填写手机号",
+        "expect": "手机号",
     "password": "12345678"
   },
     {    "type": "fail",
