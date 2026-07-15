@@ -26,6 +26,14 @@
         "username": "312",
         "expect": "测试错误",
     "password": "12345678"
+  },  {    "type": "fail",
+        "username": "312",
+        "expect": "测试错误",
+    "password": "12345678"
+  },  {    "type": "fail",
+        "username": "312",
+        "expect": "测试错误",
+    "password": "12345678"
   }
 ]
 
