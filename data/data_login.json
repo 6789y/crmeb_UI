@@ -11,27 +11,34 @@
   ,
 
     {    "type": "fail",
-    "username": "194972664",
-    "password": "",
-    "expect": "请填写密码"}
-  ,
+    "username": "19044972664",
+    "password": "1254",
+    "expect": "错误"}
+    ,
 
     {    "type": "fail",
-    "username": "190442664",
-    "password": "",
-    "expect": "请填写密码"}
-  ,
+    "username": "19044972664",
+    "password": "1254",
+    "expect": "错误"}
+    ,
 
     {    "type": "fail",
-    "username": "1902664",
-    "password": "",
-    "expect": "请填写密码"}
-  ,
+    "username": "19044972664",
+    "password": "1254",
+    "expect": "错误"}
+    ,
 
     {    "type": "fail",
-    "username": "19972664",
-    "password": "",
-    "expect": "请填写密码"}
+    "username": "19044972664",
+    "password": "1254",
+    "expect": "错误"}
+    ,
+
+    {    "type": "fail",
+    "username": "19044972664",
+    "password": "1254",
+    "expect": "错误"}
+
 ]
 
 
