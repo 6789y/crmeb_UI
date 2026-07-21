@@ -13,31 +13,25 @@
     {    "type": "fail",
     "username": "19044972664",
     "password": "1254",
-    "expect": "错误"}
+    "expect": "密码"}
     ,
 
     {    "type": "fail",
     "username": "19044972664",
     "password": "1254",
-    "expect": "错误"}
+    "expect": "密码"}
     ,
 
     {    "type": "fail",
     "username": "19044972664",
-    "password": "1254",
-    "expect": "错误"}
+    "password": "54",
+    "expect": "密码"}
     ,
 
     {    "type": "fail",
     "username": "19044972664",
-    "password": "1254",
-    "expect": "错误"}
-    ,
-
-    {    "type": "fail",
-    "username": "19044972664",
-    "password": "1254",
-    "expect": "错误"}
+    "password": "",
+    "expect": "密码"}
 
 ]
 
