@@ -5,28 +5,33 @@
     "expect": "CRMEB" },
 
     {    "type": "fail",
-    "username": "19044972664",
+    "username": "1904497264",
     "password": "",
-    "expect": "请填写密码"},
+    "expect": "请填写密码"}
+  ,
 
     {    "type": "fail",
-    "username": "",
-    "password": "12345678",
-    "expect": "手机号"},
-  {    "type": "fail",
-        "username": "12",
-        "expect": "手机号",
-    "password": "12345678"
-  },
+    "username": "194972664",
+    "password": "",
+    "expect": "请填写密码"}
+  ,
+
     {    "type": "fail",
-        "username": "122",
-        "expect": "请填写手机号",
-    "password": "12345678"
-  },  {    "type": "fail",
-        "username": "312",
-        "expect": "测试错误",
-    "password": "12345678"
-  }
+    "username": "190442664",
+    "password": "",
+    "expect": "请填写密码"}
+  ,
+
+    {    "type": "fail",
+    "username": "1902664",
+    "password": "",
+    "expect": "请填写密码"}
+  ,
+
+    {    "type": "fail",
+    "username": "19972664",
+    "password": "",
+    "expect": "请填写密码"}
 ]
 
 
