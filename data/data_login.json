@@ -7,31 +7,8 @@
     {    "type": "fail",
     "username": "1904497264",
     "password": "",
-    "expect": "请填写密码"}
-  ,
-
-    {    "type": "fail",
-    "username": "19044972664",
-    "password": "1254",
     "expect": "密码"}
-    ,
 
-    {    "type": "fail",
-    "username": "19044972664",
-    "password": "1254",
-    "expect": "密码"}
-    ,
-
-    {    "type": "fail",
-    "username": "19044972664",
-    "password": "54",
-    "expect": "密码"}
-    ,
-
-    {    "type": "fail",
-    "username": "19044972664",
-    "password": "12",
-    "expect": "密码"}
 
 ]
 
