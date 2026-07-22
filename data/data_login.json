@@ -2,7 +2,15 @@
   {    "type": "pass",
     "username": "19044972664",
     "password": "12345678",
-    "expect": "CRMEB" }
+    "expect": "CRMEB" },
+      {    "type": "fail",
+    "username": "19044972664",
+    "password": "",
+    "expect": "密码"},
+      {    "type": "fail",
+    "username": "19044972664",
+    "password": "11",
+    "expect": "密码"}
 
 
 
