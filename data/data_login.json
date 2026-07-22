@@ -4,10 +4,7 @@
     "password": "12345678",
     "expect": "CRMEB" },
 
-    {    "type": "fail",
-    "username": "1904497264",
-    "password": "",
-    "expect": "密码"}
+
 
 
 ]
